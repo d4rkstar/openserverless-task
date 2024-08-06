@@ -1,0 +1,9 @@
+Subcommand: ops ide
+
+Usage:
+    ide devel [--dry-run]
+    ide deploy [<action>] [--dry-run]
+
+Commands:
+    ide devel               activate development mode
+    ide deploy              deploy everything or just one action
