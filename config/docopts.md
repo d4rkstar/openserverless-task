@@ -1,13 +1,16 @@
-Section:
-  ops config
+# Tasks:
 
-Usage:
+  `ops config`
+
+# Usage:
+
+```Usage:
   config (enable|disable) [--all] [--redis] [--mongodb] [--minio] [--cron] [--static] [--postgres] [--prometheus] [--slack] [--mail] [--affinity] [--tolerations] [--quota]  
   config apihost (<apihost>|auto) [--tls=<email>] [--protocol=<http/https>|auto]
   config runtimes [<runtimesjson>]  
   config slack [--apiurl=<slackapiurl>] [--channel=<slackchannel>]
   config mail  [--mailuser=<mailuser>] [--mailpwd=<mailpwd>] [--mailfrom=<mailfrom>] [--mailto=<mailto>]
-  config volumes [--couchdb=<couchdb>] [--kafka=<kafka>] [--postgres=<postgres>] [--storage=<storage>] [--alerting=<alerting>] [--zookeeper=<zookeeper>] [--redis=<redis>] [--mongogb=<mongodb>]
+  config volumes [--couchdb=<couchdb>] [--kafka=<kafka>] [--pgvol=<postgres>] [--storage=<storage>] [--alerting=<alerting>] [--zookeeper=<zookeeper>] [--redisvol=<redis>] [--mongogb=<mongodb>]
   config controller [--javaopts=<javaopts>] [--loglevel=<loglevel>] [--replicas=<replicas>]
   config invoker [--javaopts=<javaopts>] [--poolmemory=<poolmemory>] [--timeoutsrun=<timeoutsrun>] [--timeoutslogs=<timeoutslogs>] [--loglevel=<loglevel>] [--replicas=<replicas>]
   config limits [--time=<time>] [--memory=<memory>] [--sequencelength=<sequencelength>] [--perminute=<perminute>] [--concurrent=<concurrent>] [--triggerperminute=<triggerperminute>] [--activation_max_payload=<activation_max_payload>]
@@ -22,8 +25,10 @@ Usage:
   config (status|export|reset)
   config use [<n>] [--delete] [--rename=<rename>]
   config minimal  
- 
-Commands:
+```
+
+# Commands:
+```
   config apihost          configure the apihost (auto: auto assign) and enable tls
   config runtime          show the current runtime.json or import the <runtime-json> if provided
   config enable           enable OpenServerless services to install
@@ -46,8 +51,10 @@ Commands:
   config export           export all the variables
   config use              use a different kubernetes cluster among those you created
   config minimal          shortcut for ops config enabling only redis,mongodb,minio,cron,static,postgres
+```
 
-Options:
+# Options:
+```
   --all                 select all services
   --redis               select redis
   --mongodb             select mongodb (FerretDB Proxy)
@@ -77,3 +84,4 @@ Options:
   --s3                  activate s3 compatible ingress on components supporting it
   --console             activate a s3console ingress on components supporting it (Currently MINIO)
   --quota               select quota checker module
+```
