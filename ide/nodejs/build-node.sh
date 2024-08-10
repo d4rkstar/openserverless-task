@@ -1,3 +1,4 @@
+#!/bin/bash
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -15,15 +16,14 @@
 # specific language governing permissions and limitations
 # under the License.
 
-_*
-!ide/deploy/__main__.py
-ide/deploy/node_modules
-.idea/
-.vscode/
-.git-hooks/
-TODO.txt
-**/.env
-**/id_rsa*
-.task/
-attic.txt
-**/venv/
+DIR="${1:?directory}"
+ZIP="${2:?zip file}"
+cd "$DIR"
+npm install
+touch node_modules/.package-lock.json
+if test -f "$ZIP"
+then rm "$ZIP"
+fi
+7zz a "$ZIP" -tzip node_modules >/dev/null
+ls -l $ZIP
+

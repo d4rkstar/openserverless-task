@@ -15,15 +15,24 @@
 # specific language governing permissions and limitations
 # under the License.
 
-_*
-!ide/deploy/__main__.py
-ide/deploy/node_modules
-.idea/
-.vscode/
-.git-hooks/
-TODO.txt
-**/.env
-**/id_rsa*
-.task/
-attic.txt
-**/venv/
+# invoked by ipython from the root folder
+from pathlib import Path
+from subprocess import run
+
+args = {}
+lines = []
+
+try: 
+    lines += Path(".env").read_text().splitlines()
+except: pass
+try: 
+    lines += Path("packages/.env").read_text().splitlines()
+except: pass
+try:
+    lines += run(["ops", "-config", "-dump"], capture_output=True, text=True).stdout.splitlines()
+except: pass
+
+args = { line.split("=",1)[0]: line.split("=",1)[-1]  for line in lines}
+
+%load_ext autoreload
+%autoreload 2

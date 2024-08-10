@@ -25,108 +25,42 @@ tasks:
   prereq:
     silent: true
     cmds:
-      - >
-        test "$(($NUVDEV_VERSION +0))" -gt 2404130000 
-        || die "Your .devcontainer.json is outdated - update it from here: https://raw.githubusercontent.com/mastrogpt/starter/main/.devcontainer.json"
-      - test -e "/.nuvolaris" || test -n "$NUVDEV_FORCE" || die "This command must be run in a Nuvolaris DevContainer"
       - test "$(python3 -V | awk -F. '{print $2}')" -ge 10 || die "python 3.10 or greater not available"
+      - test -x "$(which virtualenv)" || die "virtualenv does not exist"
       - test "$(node -v | awk -F. '{print substr($1,2) }')" -ge 18 || die "nodejs 18 or greater not available"
       - test "$(printf '%s\n' "$(bun -v)" "1.1.18" | sort -V | head -n 1)" = "1.1.18" || die "bun 1.1.18 or greater not available"
-      - test -d "$NUV_PWD/packages" || die "no packages in current directory"
-      - test -e ~/.wskprops || die "please run 'nuv ide login' first"
-      - test -n "$NUVDEV_HOST" || die "please run 'nuv ide login' first"
+      - test -d "$OPS_PWD/packages" || die "no packages in current directory"
+      - test -e ~/.wskprops || die "please run 'ops ide login' first"
+      - test -n "$OPSDEV_HOST" || die "please run 'ops ide login' first"
       - |
-        if ! test -d "$NUV_ROOT/ide2/deploy/node_modules"
-          then cd $NUV_ROOT/ide2/deploy && bun install
+        if ! test -d "$OPS_ROOT/ide/deploy/node_modules"
+          then cd $OPS_ROOT/ide/deploy && bun install
         fi
       - |
-        if test -e "$NUV_PWD/package.json"
-        then if ! test -d "$NUV_PWD/node_modules"
-             then cd $NUV_PWD ; npm install
+        if test -e "$OPS_PWD/package.json"
+        then if ! test -d "$OPS_PWD/node_modules"
+             then cd $OPS_PWD ; npm install
              fi
         fi
       - |
-        if ! python3 -m pip list | grep watchfiles >/dev/null 2>/dev/null
-        then
-            PIP_FLAG="--user"
-            if which python3 | grep $HOME >/dev/null
-            then PIP_FLAG=""
-            fi
-            python3 -m pip install $PIP_FLAG watchfiles asyncio
-        fi
-      - |
         if ! which http-server >/dev/null 2>/dev/null
-        then npm install -g http-server
+        then bun install -g http-server
         fi
       - task: kill
-
-  deploy:
-    silent: true
-    interactive: true
-    desc: deploy a project or a single action (with _action_=<dir-or-file>)
-    cmds:
-      - task: prereq
-      - |
-        set -a
-        if test -e $NUV_PWD/.env
-        then source $NUV_PWD/.env
-        fi
-        if test -e $NUV_PWD/packages/.env
-        then source $NUV_PWD/packages/.env
-        fi
-        if {{.__dry_run}}
-        then DRY="--dry-run" ; ECHO='echo'
-        else DRY="" ; ECHO=""
-        fi
-        if test -z "{{._action_}}"
-        then
-            bun {{.TASKFILE_DIR}}/deploy/index.js "$NUV_PWD" -d $DRY 
-            $ECHO nuv web upload web
-            echo "URL: $NUVDEV_HOST"
-        else
-            bun {{.TASKFILE_DIR}}/deploy/index.js "$NUV_PWD" -s "{{._action_}}" $DRY            
-        fi
-
-  devel:
-    interactive: true
-    silent: true
-    desc: start interactive development mode files
-    cmds:
-      - task: prereq
-      - |
-        set -a
-        if test -e $NUV_PWD/.env
-        then source $NUV_PWD/.env
-        fi
-        if test -e $NUV_PWD/packages/.env
-        then source $NUV_PWD/packages/.env
-        fi
-        if {{.__dry_run}}
-        then DRY="--dry-run" ; ECHO='echo'
-        else DRY="" ; ECHO=""
-        fi
-        if cat /proc/version | grep -i microsoft
-        then export WATCHFILES_FORCE_POLLING=1
-        fi
-        #python3 -m deploy "$NUV_PWD" -w $DRY
-        bun {{.TASKFILE_DIR}}/deploy/index.js "$NUV_PWD" -w $DRY
-        #npm-run-all --parallel deploy serve
-        true
-
+  
   kill:
     silent: true
     ignore_errors: true
     cmds:
       - |
-        if test -e ~/.nuv/tmp/deploy.pgrp
+        if test -e ~/.ops/tmp/deploy.pgrp
         then
-          PGRP="$(cat ~/.nuv/tmp/deploy.pgrp)"
-          #pstree $PID
+          PGRP="$(cat ~/.ops/tmp/deploy.pgrp)"
           LOOP=true
           while $LOOP
           do
             LOOP=false
-            ps -a -o pgid,pid,stat | grep -v 'Z' | while read GRP PID STAT
+            ps -a -o pgid,pid,stat | rg -v 'Z' | while read GRP PID STAT
             do 
               echo Terminating $PID in $GRP
               if test "$GRP" = "$PGRP"
@@ -137,8 +71,196 @@ tasks:
             done
             sleep 2
           done
-          rm ~/.nuv/tmp/deploy.pgrp
+          rm ~/.ops/tmp/deploy.pgrp
         fi
 
 
+  setup:
+    silent: true
+    desc: setup OpenServerless ide
+    cmds:
+    - |
+      clear
+      while ! test -e ~/.wskprops
+      do $OPS ide login
+      done
+    - |
+      echo "**************************************************************************************"
+      echo "*** Available Commands on Terminal:"
+      echo "*** 'deploy' (alias for 'nuv ide deploy') to deploy your app to https://$NUVDEV_USERNAME.nuvolaris.dev"
+      echo "*** 'devel'  (alias for 'nuv ide devel') to start incremental development mode"
+      echo "*** 'login'  (alias for 'nuv ide login')  to login as a different user"
+      echo "*** 'ops ide' for more informations
+      echo "*** https://openserverless.apache.org/ for online documentation"
+      echo "**************************************************************************************"
 
+
+  login:
+    silent: true
+    desc: login in you OpenServerless host
+    cmds:
+    - |
+      if test -n "{{._apihost_}}"
+      then OPSDEV_APIHOST="{{._apihost_}}"
+      else OPSDEV_APIHOST="https://nuvolaris.dev"
+      fi
+      echo "*** Configuring Access to $OPSDEV_APIHOST ***"
+      if test -z "{{._username_}}"
+      then  echo -n "Enter Username: "
+            read OPSDEV_USERNAME
+      else OPSDEV_USERNAME="{{._username_}}"
+      fi
+      echo apihost=$OPSDEV_APIHOST username=$OPSDEV_USERNAME
+      if $OPS -login "$OPSDEV_APIHOST" "$OPSDEV_USERNAME"
+      then 
+        config OPSDEV_APIHOST="$OPSDEV_APIHOST"
+        config OPSDEV_USERNAME="$OPSDEV_USERNAME"
+        config OPSDEV_HOST="https://$OPSDEV_USERNAME.nuvolaris.dev"
+        source ~/.wskprops        
+      else 
+        false
+      fi
+
+
+  poll:
+    silent: true
+    desc: poll activation logs
+    cmds:
+      - $OPS activation poll
+
+  serve:
+    silent: true
+    desc: local web server
+    ignore_error: true
+    cmds:
+     - >
+       http-server 
+       -a 127.0.0.1 "$OPS_PWD/web" 
+       -c-1 --mimetypes mime.types 
+       -P $OPSDEV_HOST
+
+
+  deploy:
+    silent: true
+    interactive: true
+    desc: deploy a project or a single action (with _action_=<dir-or-file>)
+    cmds:
+      - task: prereq
+      - |
+        set -a
+        if test -e $OPS_PWD/.env
+        then source $OPS_PWD/.env
+        fi
+        if test -e $OPS_PWD/packages/.env
+        then source $OPS_PWD/packages/.env
+        fi
+        if {{.__dry_run}}
+        then DRY="--dry-run" ; ECHO='echo'
+        else DRY="" ; ECHO=""
+        fi
+        if test -z "{{._action_}}"
+        then
+            bun {{.TASKFILE_DIR}}/deploy/index.js "$OPS_PWD" -d $DRY 
+            $ECHO ops web upload web
+            echo "URL: $OPSDEV_HOST"
+        else
+            bun {{.TASKFILE_DIR}}/deploy/index.js "$OPS_PWD" -s "{{._action_}}" $DRY            
+        fi
+
+
+  undeploy:
+    desc: undeploy all the actions
+    prompt: "are you sure you want to remove all actions and packages?"
+    silent: true
+    cmds:
+      - task: prereq
+      - >
+        $OPS action list
+        | awk  'NR>1 { print $1}' 
+        | while read action ;
+        do  if {{.__dry_run}}
+            then echo '$' $OPS action delete "$action"
+            else $OPS action delete "$action"
+            fi
+        done
+      - >
+        $OPS package list
+        | awk  'NR>1 { print $1}'
+        | while read package ;
+        do if {{.__dry_run}}
+           then echo '$' $OPS package delete "$package" 
+           else $OPS package delete "$package" 
+           fi
+        done
+
+
+  clean:
+    silent: true
+    cmds:
+      - task: kill
+      - |
+        if test -d "$OPS_PWD/packages" 
+        then 
+           echo "*** removing virtualenv"
+           /bin/rm -rvf "$OPS_PWD"/packages/*/*/virtualenv/
+           echo "*** removing node_modules"
+           /bin/rm -rvf "$OPS_PWD"/packages/*/*/node_modules/
+           echo "*** removing .zip"
+           /bin/rm -vf "$OPS_PWD"/packages/*/*.zip 
+        else die "no packages in current directory"
+        fi
+
+
+  devel:
+    interactive: true
+    silent: true
+    desc: start interactive development mode files
+    cmds:
+      - task: prereq
+      - |
+        set -a
+        if test -e $OPS_PWD/.env
+        then source $OPS_PWD/.env
+        fi
+        if test -e $OPS_PWD/packages/.env
+        then source $OPS_PWD/packages/.env
+        fi
+        if {{.__dry_run}}
+        then DRY="--dry-run" ; ECHO='echo'
+        else DRY="" ; ECHO=""
+        fi
+        if [ -f /proc/version ]; then
+          if rg -i microsoft /proc/version >/dev/null 2>&1; then
+            export WATCHFILES_FORCE_POLLING=1
+          fi
+        # Check for macOS platform
+        elif [ "$(uname)" == "Darwin" ]; then
+          #export WATCHFILES_FORCE_POLLING=1
+        # Check for Windows platform (via WSL or similar)
+        elif [ -n "$WSL_DISTRO_NAME" ]; then
+          # WSL can have /proc/version like Linux
+          if rg -i microsoft /proc/version >/dev/null 2>&1; then
+            export WATCHFILES_FORCE_POLLING=1
+          fi
+        fi
+        bun {{.TASKFILE_DIR}}/deploy/index.js "$OPS_PWD" -w $DRY
+        true
+
+
+
+
+
+
+
+  shell:
+    desc: open a bash shell with the current environment
+    interactive: true
+    dir: $OPS_PWD
+    cmds:
+      - bash
+
+  python:
+    desc: python subcommand
+
+  nodejs:
+    desc: nodejs subcommand

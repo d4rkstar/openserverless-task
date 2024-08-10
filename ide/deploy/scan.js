@@ -17,7 +17,7 @@
 
 import { glob } from 'glob';
 import { buildZip, buildAction, deployPackage, deployAction } from './deploy.js';
-import { getNuvolarisConfig } from './client.js';
+import { getOpenServerlessConfig } from './client.js';
 
 export async function scan() {
   const deployments = new Set();
@@ -32,7 +32,7 @@ export async function scan() {
     "packages/*/*/composer.json",
     "packages/*/*/go.mod"
   ];
-  const packageGlobs = getNuvolarisConfig("requirements", defaultReqsGlobs);
+  const packageGlobs = getOpenServerlessConfig("requirements", defaultReqsGlobs);
   const reqs = [];
 
   for (const pkgGlob of packageGlobs) {
@@ -59,7 +59,7 @@ export async function scan() {
     "packages/*/*/index.php",
     "packages/*/*/main.go"
   ];
-  const mainsGlobs = getNuvolarisConfig("mains", defaultMainsGlobs);
+  const mainsGlobs = getOpenServerlessConfig("mains", defaultMainsGlobs);
   const mains = [];
 
   for (const mainGlob of mainsGlobs) {
@@ -86,7 +86,7 @@ export async function scan() {
     "packages/*/*.php",
     "packages/*/*.go"
   ];
-  const singlesGlobs = getNuvolarisConfig("singles", defaultSinglesGlobs);
+  const singlesGlobs = getOpenServerlessConfig("singles", defaultSinglesGlobs);
   const singles = [];
 
   for (const singleGlob of singlesGlobs) {

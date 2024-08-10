@@ -21,12 +21,12 @@ import { resolve } from 'path';
 import process from 'process';
 import { createInterface } from 'readline';
 
-export function getNuvolarisConfig(key, defaultValue) {
+export function getOpenServerlessConfig(key, defaultValue) {
   try {
-    const dir = process.env.NUV_PWD || '/do_not_exists';
+    const dir = process.env.OPS_PWD || '/do_not_exists';
     const file = resolve(dir, 'package.json');
     const info = JSON.parse(readFileSync(file, 'utf8'));
-    return info.nuvolaris?.[key] || defaultValue;
+    return info.openserverless?.[key] || defaultValue;
   } catch {
     return defaultValue;
   }
@@ -40,7 +40,7 @@ function readlines(inp) {
 }
 
 export function launch(key, defaultValue) {
-  const cmd = getNuvolarisConfig(key, defaultValue);
+  const cmd = getOpenServerlessConfig(key, defaultValue);
   const proc = spawn(cmd, {
     shell: true,
     cwd: process.env.NUV_PWD,
@@ -53,15 +53,15 @@ export function launch(key, defaultValue) {
 }
 
 export function serve() {
-  launch('devel', 'nuv ide serve');
+  launch('devel', 'ops ide serve');
 }
 
 export function logs() {
-  launch('logs', 'nuv activation poll');
+  launch('logs', 'ops activation poll');
 }
 
 export function build() {
-  const deploy = getNuvolarisConfig('deploy', 'true');
+  const deploy = getOpenServerlessConfig('deploy', 'true');
   const proc = spawn(deploy, {
     shell: true,
     env: process.env,
