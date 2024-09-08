@@ -14,17 +14,26 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+#
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
 
-_*
-!ide/deploy/__main__.py
-ide/deploy/node_modules
-.idea/
-.vscode/
-.idea/
-.git-hooks/
-TODO.txt
-**/.env
-**/id_rsa*
-.task/
-attic.txt
-**/venv/
+metadata:
+  name: $EKS_NAME
+  region: $AWS_DEFAULT_REGION
+  version: "$EKS_KUBERNETES_VERSION"
+iam:
+  withOIDC: true
+nodeGroups:
+  - name: ${EKS_NAME}-ng-1
+    instanceType: $EKS_VM
+    desiredCapacity: $EKS_COUNT
+    volumeSize: $EKS_SIZE
+    ssh:
+      allow: true
+      publicKeyName: $EKS_SSHKEY
+    iam:
+      withAddonPolicies:
+        ebs: true
+addons:
+  - name: aws-ebs-csi-driver

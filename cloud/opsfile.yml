@@ -15,16 +15,30 @@
 # specific language governing permissions and limitations
 # under the License.
 
-_*
-!ide/deploy/__main__.py
-ide/deploy/node_modules
-.idea/
-.vscode/
-.idea/
-.git-hooks/
-TODO.txt
-**/.env
-**/id_rsa*
-.task/
-attic.txt
-**/venv/
+version: '3'
+
+tasks:
+
+  aws: 
+    desc: Amazon Web Services subcommands
+
+  gcloud: 
+    desc: Google Cloud subcommands
+
+  eks: 
+    desc: Amazon Web Services - EKS subcommands
+
+  aks:
+    desc: Azure AKS subcommands
+
+  gke:
+    desc: Google Cloud - GKE subcommands
+
+  k3s:                 
+    desc: Rancher K3S subcommands
+  
+  mk8s:                 
+    desc: Ubuntu MicroK8s subcommands
+  
+  osh:
+    desc: RedHat OpenShift subcommands
