@@ -22,6 +22,8 @@ vars:
 env:
   DATADIR:
     sh: echo $OPS_TMP/kind
+  B64_KEY1:
+    sh: base64 -e "$(openssl rand -hex 16)"
   KUBECONFIG: 
     sh: |- 
         if test -e "$OPS_TMP/kubeconfig"
@@ -62,6 +64,8 @@ tasks:
     cmds:
     - mkdir -p $DATADIR
     - envsubst -i kind.yaml -o _kind.yaml
+    - mkdir -p $DATADIR/etc/enc
+    - envsubst -i encryption-config.yaml -o $DATADIR/etc/enc/encryption-config.yaml
     - > 
       kind create cluster 
       --kubeconfig="$OPS_TMP/kubeconfig" 
