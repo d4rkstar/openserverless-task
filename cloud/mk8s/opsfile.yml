@@ -20,6 +20,8 @@
     SSH: "ssh -oStrictHostKeyChecking=no"
 
   env:
+    B64_KEY1:
+      sh: base64 -e "$(openssl rand -hex 16)"
     KUBECONFIG:
       sh: |-
         if test -e "$OPS_TMP/kubeconfig"
@@ -39,7 +41,7 @@
         - >
           cat mk8s.sh | {{.SSH}} {{.INSTALL_USER}}@{{._server_}} 
           tee mk8s.sh >/dev/null
-        - "{{.SSH}} {{.INSTALL_USER}}@{{._server_}} sudo bash mk8s.sh {{._server_}}"
+        - "{{.SSH}} {{.INSTALL_USER}}@{{._server_}} sudo bash mk8s.sh {{._server_}} {{.B64_KEY1}}"
 
     create:
       silent: true

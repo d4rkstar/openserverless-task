@@ -16,7 +16,8 @@
 # specific language governing permissions and limitations
 # under the License.
 SERVER="$1"
-# if not provided try to retrieve the public it
+B64_KEY1="$2"
+# if not provided try to retrieve the public ip
 if test -z "$SERVER"
 then SERVER="$(curl https://ipecho.net/plain)"
 fi
@@ -29,8 +30,45 @@ apt-get update
 apt-get install -y snapd curl grep sudo
 snap install microk8s --classic
 microk8s stop
+
+if test -n "$B64_KEY1"
+then
+  ENCRYPTION_CONFIG=/var/snap/microk8s/current/args/encryption-config.yaml
+  cat <<EOF >$ENCRYPTION_CONFIG
+  apiVersion: apiserver.config.k8s.io/v1
+  kind: EncryptionConfiguration
+  resources:
+    - resources:
+        - secrets
+      providers:
+        - aescbc:
+            keys:
+              - name: key1
+                secret: $B64_KEY1
+        - identity: {}
+    - resources:
+        - whisks.nuvolaris.org
+        - whisksusers.nuvolaris.org
+        - workflows.nuvolaris.org
+      providers:
+        - aescbc:
+            keys:
+              - name: key1
+                secret: $B64_KEY1
+        - identity: {}
+EOF
+chown root:root $ENCRYPTION_CONFIG
+sudo chmod 600 $ENCRYPTION_CONFIG
+
+cat <<EOF >> /var/snap/microk8s/current/args/kube-apiserver
+# encryption at rest
+--encryption-provider-config=$ENCRYPTION_CONFIG
+
+EOF
+fi
+
 cp /var/snap/microk8s/current/certs/csr.conf.template /tmp/in
-# script to try to give accettable values for ip and dns name
+# script to try to give acceptable values for ip and dns name
 
 python3 <<EOF >/var/snap/microk8s/current/certs/csr.conf.template
 import os, socket, re

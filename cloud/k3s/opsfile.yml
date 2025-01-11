@@ -24,6 +24,8 @@ vars:
   CERTMANAGER: "https://github.com/cert-manager/cert-manager/releases/download/v1.11.0/cert-manager.yaml"
 
 env:
+  B64_KEY1:
+    sh: base64 -e "$(openssl rand -hex 16)"
   KUBECONFIG:
     sh: |-
       if test -e "$OPS_TMP/kubeconfig"
@@ -43,6 +45,8 @@ tasks:
       INSTALL_USER: '{{._user_ | default "root"}}'
     cmds:
       - test -n "{{._server_}}" || die "required <server> ip or hostname"
+      - envsubst -i encryption-config.yaml -o _encryption-config.yaml
+      - k3sup scp _encryption-config.yaml {{.INSTALL_USER}}@{{._server_}}":/var/lib/rancher/k3s/server/encryption-config.yaml
       - >
         k3sup install --k3s-version="{{.K3S_VERSION}}"
         --host="{{._server_}}" --user="{{.INSTALL_USER}}"
