@@ -35,7 +35,8 @@ tasks:
     - test -d "{{.DIR}}" || die "{{.DIR}} not found or not a directory"
     - |
       if test -f "{{.DIR}}/requirements.txt"
-      then bash build-venv.sh "{{.DIR}}" "{{.DIR}}.zip"
+      # then bash build-venv.sh "{{.DIR}}" "{{.DIR}}.zip"
+      then bun build-venv.js "{{.DIR}}" "{{.DIR}}.zip"
       fi
     sources:
     - "{{.DIR}}/requirements.txt"
