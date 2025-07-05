@@ -35,13 +35,12 @@ tasks:
     - test -d "{{.DIR}}" || die "{{.DIR}} not found or not a directory"
     - |
       if test -f "{{.DIR}}/requirements.txt"
-      # then bash build-venv.sh "{{.DIR}}" "{{.DIR}}.zip"
       then bun build-venv.js "{{.DIR}}" "{{.DIR}}.zip"
       fi
-    sources:
-    - "{{.DIR}}/requirements.txt"
-    generates:
-    - "{{.DIR}}/virtualenv/date"
+    #sources:
+    #- "{{.DIR}}/requirements.txt"
+    #generates:
+    #- "{{.DIR}}/virtualenv/date"
 
   action:
     silent: true
@@ -57,7 +56,7 @@ tasks:
     desc: python cli
     cmds:
     - |
-      pip install ipython
+      uv pip install ipython
       find "$OPS_PWD" -name requirements.txt -execdir pip install -r {} \;
       if test -e "$OPS_PWD/.env"
       then set -a ; source "$OPS_PWD/.env"

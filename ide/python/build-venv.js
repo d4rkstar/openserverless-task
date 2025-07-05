@@ -1,6 +1,30 @@
 import { $ } from "bun";
-import { existsSync, rmSync, statSync, writeFileSync } from "fs";
+import { existsSync, rmSync, statSync, writeFileSync, readFileSync } from "fs";
 import { join, resolve, delimiter as pathSeparator } from "path";
+import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
+import { pipeline } from "node:stream/promises";
+import { rm } from "node:fs/promises";
+
+
+async function calculateHash(file) {
+    const hash = createHash("sha256");
+
+    await pipeline(
+        createReadStream(file),
+        hash
+    );
+
+    return (await hash.digest("hex")).toString().trim();
+}
+
+async function readHash(file) {
+    if (!existsSync(file))
+        return null;
+
+    return (await readFileSync(file)).toString().trim();
+}
+
 
 // --- Get input arguments ---
 const [,, DIR, ZIP] = process.argv;
@@ -24,7 +48,20 @@ const uvPath = opsBin
     ? join(opsBin, process.platform === "win32" ? "uv.exe" : "uv")
     : "uv";
 
+// Hash from requirements.txt
 const requirementsFile = join(absDir, "requirements.txt");
+const hashDigest = await calculateHash(requirementsFile);
+
+// Hash from virtualenv
+const hashFile = join(venvDir, "hash");
+const hash = await readHash(hashFile);
+
+let isToRebuild = true;
+if (hashDigest === hash) {
+    isToRebuild = false;
+} else {
+    console.log('requirements.txt file have been changed. Need to rebuild virtualenv!');
+}
 
 // --- Check if uv is available ---
 try {
@@ -35,22 +72,24 @@ try {
 }
 
 // --- 1. Create virtualenv if missing ---
-if (!existsSync(venvDir)) {
+if (isToRebuild) {
+    // console.log(`Removing recursive ${venvDir}`)
+    await rm(venvDir, { recursive: true, force: true });
     await $`${uvPath} venv ${venvDir}`;
-}
 
-// --- 2. Install dependencies into the virtualenv ---
-try {
-    await $`${uvPath} pip install -r ${requirementsFile} --python ${pythonPath}`;
-} catch (err) {
-    console.error(`❌ Failed to install dependencies from ${requirementsFile}`);
+    // --- 2. Install dependencies into the virtualenv ---
+    try {
+        await $`${uvPath} pip install -r ${requirementsFile} --python ${pythonPath}`;
+    } catch (err) {
+        console.error(`❌ Failed to install dependencies from ${requirementsFile}`);
 
-}
+    }
 
-// --- 4. Ensure virtualenv/bin/activate exists ---
-const activatePath = join(venvDir, binDir, process.platform === "win32" ? "activate.bat" : "activate");
-if (!existsSync(activatePath)) {
-    writeFileSync(activatePath, "");
+    // --- 4. Ensure virtualenv/bin/activate exists ---
+    const activatePath = join(venvDir, binDir, process.platform === "win32" ? "activate.bat" : "activate");
+    if (!existsSync(activatePath)) {
+        writeFileSync(activatePath, "");
+    }
 }
 
 // --- 5. Remove existing ZIP if present ---
@@ -65,5 +104,5 @@ await $`7zz a ${absZip} -tzip ${venvDir} >/dev/null`;
 const stats = statSync(absZip);
 console.log(`${ZIP} - ${stats.size} bytes`);
 
-// --- 8. Write timestamp into virtualenv/date ---
-writeFileSync(join(venvDir, "date"), new Date().toISOString() + "\n");
+// --- 8. Write hash into virtualenv/hash ---
+writeFileSync(hashFile, hashDigest);

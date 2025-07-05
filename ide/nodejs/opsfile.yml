@@ -35,15 +35,15 @@ tasks:
     - test -d "{{.DIR}}" || die "{{.DIR}} not found or not a directory"
     - |
       if test -f "{{.DIR}}/package.json"
-      then bash build-node.sh "{{.DIR}}" "{{.DIR}}.zip"
+      then bun build-node.js "{{.DIR}}" "{{.DIR}}.zip"
       fi
-    sources:
-    - "{{.DIR}}/package.json"
-    generates:
-    - "{{.DIR}}/node_modules/.package-lock.json"
+    #sources:
+    #- "{{.DIR}}/package.json"
+    #generates:
+    #- "{{.DIR}}/node_modules/.package-lock.json"
 
   action:
-    silent: false
+    silent: true
     desc: build the action updating the zip
     requires: {var: [DIR]}
     dir: "{{.DIR}}"

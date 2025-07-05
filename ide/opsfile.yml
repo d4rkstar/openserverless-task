@@ -229,7 +229,9 @@ tasks:
            echo "*** removing node_modules"
            /bin/rm -rvf "$OPS_PWD"/packages/*/*/node_modules/
            echo "*** removing .zip"
-           /bin/rm -vf "$OPS_PWD"/packages/*/*.zip 
+           /bin/rm -vf "$OPS_PWD"/packages/*/*.zip
+           echo "*** removing zip.tmp"
+           /bin/rm -rvf "$OPS_PWD"/packages/*/*.zip.tmp*
         else die "no packages in current directory"
         fi
 
