@@ -16,8 +16,18 @@
 // under the License.
 
 import fs from "fs/promises";
+import path from "path";
 import { expandEnv } from "./env_utils";
+import { getBuiltImageTag, buildImage } from "./builder.js";
 const { parse } = await import("shell-quote");
+
+/**
+ * Get the registry host for custom images
+ * @returns {string} - Registry host
+ */
+function getRegistryHost() {
+  return "127.0.0.1:32000";
+}
 
 const MAINS = ["__main__.py", "index.js", "index.php", "main.go"];
 
@@ -42,6 +52,33 @@ async function exec(cmd) {
     stdio: ["inherit", "inherit", "inherit"],
   });
   await proc.exited;
+}
+
+/**
+ * Determine the language kind from file extension
+ * @param {string} filePath - Path to the file
+ * @returns {string|null} - Language kind or null
+ */
+function getKindFromFile(filePath) {
+  const ext = path.extname(filePath);
+  const basename = path.basename(filePath);
+
+  // Check by main file name
+  if (basename === "__main__.py") return "python";
+  if (basename === "index.js") return "nodejs";
+  if (basename === "index.php") return "php";
+  if (basename === "main.go") return "go";
+
+  // Check by extension
+  if (ext === ".py") return "python";
+  if (ext === ".js") return "nodejs";
+  if (ext === ".php") return "php";
+  if (ext === ".go") return "go";
+  if (ext === ".java") return "java";
+  if (ext === ".rb") return "ruby";
+  if (ext === ".cs") return "dotnet";
+
+  return null;
 }
 
 async function extractArgs(files) {
@@ -126,9 +163,88 @@ export async function deployAction(artifact) {
     toInspect = [artifact];
   }
 
-  const args = (await extractArgs(toInspect)).join(" ");
+  let args = await extractArgs(toInspect);
+
+  // Check if there's a --docker auto parameter and replace it
+  const dockerAutoIndex = args.findIndex(arg => arg === "--docker auto");
+  if (dockerAutoIndex !== -1) {
+    // Determine the language kind from the artifact
+    let kind = null;
+
+    // For zip files, check the main files inside
+    if (typ === "zip") {
+      for (const file of toInspect) {
+        const detectedKind = getKindFromFile(file);
+        if (detectedKind) {
+          kind = detectedKind;
+          break;
+        }
+      }
+    } else {
+      // For single files, detect from the artifact
+      kind = getKindFromFile(artifact);
+    }
+
+    if (kind) {
+      // Get the built image tag for this kind
+      let imageTag = await getBuiltImageTag(kind);
+
+      // If no image tag found, try to build one
+      if (!imageTag) {
+        console.log(`⚠️ No custom image found for ${kind}, attempting to build...`);
+
+        // Look for requirement file in the current directory
+        const requirementFiles = {
+          'python': 'requirements.txt',
+          'nodejs': 'package.json',
+          'php': 'composer.json',
+          'java': 'pom.xml',
+          'go': 'go.mod',
+          'ruby': 'Gemfile',
+          'dotnet': 'project.json'
+        };
+
+        const reqFile = requirementFiles[kind];
+        if (reqFile) {
+          // Check in packages directory first, then in current working directory
+          const baseDir = process.env.OPS_PWD || process.cwd();
+          const reqPath = path.join(baseDir, 'packages', reqFile);
+
+          try {
+            await fs.access(reqPath);
+            // File exists, build the image
+            const hash = await buildImage(reqPath);
+            if (hash) {
+              // Get the newly built image tag
+              imageTag = await getBuiltImageTag(kind);
+            }
+          } catch (error) {
+            console.log(`⚠️ No ${reqFile} found in packages directory, cannot build custom image`);
+          }
+        }
+      }
+
+      if (imageTag) {
+        const registryHost = getRegistryHost();
+        const fullImageTag = `${registryHost}/${imageTag}`;
+        console.log(`🐳 Using custom built image: ${fullImageTag}`);
+        args[dockerAutoIndex] = "--docker";
+        args.splice(dockerAutoIndex + 1, 0, fullImageTag);
+      } else {
+        console.log(`⚠️ Could not build custom image for ${kind}, using default runtime`);
+        // Remove --docker auto if no custom image is available
+        args.splice(dockerAutoIndex, 1);
+      }
+    } else {
+      console.log(`⚠️ Could not detect language kind for ${artifact}`);
+      // Remove --docker auto if kind cannot be detected
+      args.splice(dockerAutoIndex, 1);
+    }
+  }
+
+  const argsStr = args.join(" ");
   const actionName = `${pkg}/${name}`;
-  await exec(`ops action update ${actionName} ${artifact} ${args}`);
+  await exec(`ops action update ${actionName} ${artifact} ${argsStr}`);
 
   activeDeployments.delete(artifact);
 

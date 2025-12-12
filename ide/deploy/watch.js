@@ -21,10 +21,23 @@ import {watch} from 'chokidar';
 import {resolve} from 'path';
 import {deploy} from './deploy.js';
 import {logs, serve} from './client.js';
+import {buildImage} from './builder.js';
 
 import process from 'process';
 
 export let globalWatcher;
+export let requirementsWatcher;
+
+// Requirement files to watch in packages directory
+const REQUIREMENT_FILES = [
+  "packages/requirements.txt",
+  "packages/package.json",
+  "packages/composer.json",
+  "packages/pom.xml",
+  "packages/go.mod",
+  "packages/Gemfile",
+  "packages/project.json",
+];
 
 
 /**
@@ -62,6 +75,32 @@ export async function checkAndDeploy(changeType, path) {
 
   console.log(`(checkAndDeploy -> deploy) > ${changeType} ${path}`);
   await deploy(src);
+}
+
+/**
+ * Watch for changes in top-level requirement files and rebuild images
+ */
+async function watchRequirementFiles() {
+  console.log("> Watching requirement files for image builds:");
+
+  requirementsWatcher = watch(REQUIREMENT_FILES, {
+    persistent: true,
+    ignoreInitial: true,
+    atomic: 250,
+  });
+
+  requirementsWatcher.on('change', async (path) => {
+    console.log(`📦 Requirement file changed: ${path}`);
+    try {
+      await buildImage(path);
+    } catch (error) {
+      console.error(`❌ Error building image for ${path}:`, error);
+    }
+  });
+
+  return new Promise((resolve, reject) => {
+    requirementsWatcher.on('error', reject);
+  });
 }
 
 /**
@@ -104,6 +143,12 @@ export async function watchAndDeploy() {
   await logs();
 
   try {
+    // Start watching requirement files for image builds
+    watchRequirementFiles().catch(error => {
+      console.error("Requirements watcher failed:", error);
+    });
+
+    // Start watching packages for deployments
     await redeploy();
   }
   catch(error) {
