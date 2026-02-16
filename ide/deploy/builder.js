@@ -323,3 +323,102 @@ export async function scanAndBuildImages() {
     console.log("ℹ️ No requirement files found in packages directory");
   }
 }
+
+/**
+ * Extract docker annotation from action files
+ * @param {string[]} files - Array of file paths to check
+ * @returns {Promise<string|null>} - Language kind or null
+ */
+async function extractDockerAnnotation(files) {
+  for (const file of files) {
+    try {
+      const fileContent = await fs.readFile(file, "utf-8");
+      const lines = fileContent.split("\n");
+
+      for (const line of lines) {
+        // Match Python-style comments: # --docker <language>:auto
+        const pythonMatch = line.match(/^#\s*--docker\s+(\w+):auto/);
+        if (pythonMatch) {
+          return pythonMatch[1];
+        }
+
+        // Match JS-style comments: // --docker <language>:auto
+        const jsMatch = line.match(/^\/\/\s*--docker\s+(\w+):auto/);
+        if (jsMatch) {
+          return jsMatch[1];
+        }
+      }
+    } catch (error) {
+      // File doesn't exist or can't be read, skip
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Build image for a specific action if it has docker annotation
+ * @param {string} actionPath - Path to action file or directory
+ * @returns {Promise<void>}
+ */
+export async function buildImageForAction(actionPath) {
+  const MAINS = ["__main__.py", "index.js", "index.php", "main.go"];
+  const stat = await fs.stat(actionPath);
+
+  let filesToCheck = [];
+
+  if (stat.isDirectory()) {
+    // Check main files in directory
+    for (const main of MAINS) {
+      const mainPath = path.join(actionPath, main);
+      try {
+        await fs.access(mainPath);
+        filesToCheck.push(mainPath);
+      } catch (error) {
+        // File doesn't exist, skip
+      }
+    }
+  } else {
+    // Single file
+    filesToCheck.push(actionPath);
+  }
+
+  // Extract docker annotation
+  const kind = await extractDockerAnnotation(filesToCheck);
+
+  if (!kind) {
+    console.log(`ℹ️ No --docker <language>:auto annotation found in ${actionPath}`);
+    return;
+  }
+
+  console.log(`🔍 Found --docker ${kind}:auto annotation`);
+
+  // Map kind to requirement file
+  const requirementFiles = {
+    'python': 'requirements.txt',
+    'nodejs': 'package.json',
+    'php': 'composer.json',
+    'java': 'pom.xml',
+    'go': 'go.mod',
+    'ruby': 'Gemfile',
+    'dotnet': 'project.json'
+  };
+
+  const reqFile = requirementFiles[kind];
+  if (!reqFile) {
+    console.log(`⚠️ Unknown language kind: ${kind}`);
+    return;
+  }
+
+  // Build path to requirement file
+  const baseDir = process.env.OPS_PWD || process.cwd();
+  const reqPath = path.join(baseDir, 'packages', reqFile);
+
+  try {
+    await fs.access(reqPath);
+    console.log(`📦 Building image for ${kind} using packages/${reqFile}`);
+    await buildImage(reqPath);
+  } catch (error) {
+    console.log(`⚠️ No ${reqFile} found in packages directory`);
+  }
+}

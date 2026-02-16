@@ -29,7 +29,7 @@ function getRegistryHost() {
   return "127.0.0.1:32000";
 }
 
-const MAINS = ["__main__.py", "index.js", "index.php", "main.go"];
+const MAINS = ["__main__.py", "index.js", "index.php", "main.go", "Main.java"];
 
 const queue = [];
 const activeDeployments = new Map();
@@ -68,6 +68,7 @@ function getKindFromFile(filePath) {
   if (basename === "index.js") return "nodejs";
   if (basename === "index.php") return "php";
   if (basename === "main.go") return "go";
+  if (basename === "Main.java") return "java";
 
   // Check by extension
   if (ext === ".py") return "python";
@@ -88,13 +89,25 @@ async function extractArgs(files) {
       const fileContent = await fs.readFile(file, "utf-8");
       const lines = fileContent.split("\n");
       for (const line of lines) {
+        let argLine = null;
+
         // python style comment
         if (line.match(/^#[ ]?-{1,2}[^\s-].+/)) {
-          res.push(line.trim().substring(1).trim());
+          argLine = line.trim().substring(1).trim();
         }
         // js style comment
         if (line.match(/^\/\/[ ]?-{1,2}[^\s-].+/)) {
-          res.push(line.trim().substring(2).trim());
+          argLine = line.trim().substring(2).trim();
+        }
+
+        // Split the argument line into individual arguments
+        if (argLine) {
+          const parsed = parse(argLine);
+          for (const arg of parsed) {
+            if (typeof arg === 'string') {
+              res.push(arg);
+            }
+          }
         }
       }
     }
@@ -165,27 +178,17 @@ export async function deployAction(artifact) {
 
   let args = await extractArgs(toInspect);
 
-  // Check if there's a --docker auto parameter and replace it
-  const dockerAutoIndex = args.findIndex(arg => arg === "--docker auto");
-  if (dockerAutoIndex !== -1) {
-    // Determine the language kind from the artifact
-    let kind = null;
+  // Check if there's a --docker <language>:auto parameter and replace it
+  const dockerArgIndex = args.findIndex(arg => arg === "--docker");
+  if (dockerArgIndex !== -1 && dockerArgIndex + 1 < args.length) {
+    const dockerValue = args[dockerArgIndex + 1];
 
-    // For zip files, check the main files inside
-    if (typ === "zip") {
-      for (const file of toInspect) {
-        const detectedKind = getKindFromFile(file);
-        if (detectedKind) {
-          kind = detectedKind;
-          break;
-        }
-      }
-    } else {
-      // For single files, detect from the artifact
-      kind = getKindFromFile(artifact);
-    }
+    // Check if it matches the pattern <language>:auto
+    const autoMatch = dockerValue.match(/^(\w+):auto$/);
+    if (autoMatch) {
+      const kind = autoMatch[1]; // Extract the language kind (python, nodejs, etc.)
+      console.log(`🔍 Detected --docker ${kind}:auto annotation`);
 
-    if (kind) {
       // Get the built image tag for this kind
       let imageTag = await getBuiltImageTag(kind);
 
@@ -228,17 +231,13 @@ export async function deployAction(artifact) {
         const registryHost = getRegistryHost();
         const fullImageTag = `${registryHost}/${imageTag}`;
         console.log(`🐳 Using custom built image: ${fullImageTag}`);
-        args[dockerAutoIndex] = "--docker";
-        args.splice(dockerAutoIndex + 1, 0, fullImageTag);
+        // Replace <language>:auto with the full image tag
+        args[dockerArgIndex + 1] = fullImageTag;
       } else {
         console.log(`⚠️ Could not build custom image for ${kind}, using default runtime`);
-        // Remove --docker auto if no custom image is available
-        args.splice(dockerAutoIndex, 1);
+        // Remove --docker <language>:auto if no custom image is available
+        args.splice(dockerArgIndex, 2);
       }
-    } else {
-      console.log(`⚠️ Could not detect language kind for ${artifact}`);
-      // Remove --docker auto if kind cannot be detected
-      args.splice(dockerAutoIndex, 1);
     }
   }
 

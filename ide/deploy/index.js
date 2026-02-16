@@ -155,9 +155,9 @@ async function main() {
             return;
         }
 
-        // Import scanAndBuildImages to ensure images are built before deploying
-        const {scanAndBuildImages} = await import('./builder.js');
-        await scanAndBuildImages();
+        // Import buildImageForAction to build only the required image
+        const {buildImageForAction} = await import('./builder.js');
+        await buildImageForAction(action);
 
         console.log(`Deploying ${action}`);
         await deploy(action);
