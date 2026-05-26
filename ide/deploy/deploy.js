@@ -102,11 +102,9 @@ async function extractArgs(files) {
 
         // Split the argument line into individual arguments
         if (argLine) {
-          const parsed = parse(argLine);
-          for (const arg of parsed) {
-            if (typeof arg === 'string') {
-              res.push(arg);
-            }
+          const parts = argLine.split(/\s+/);
+          for (const part of parts) {
+            if (part) res.push(part);
           }
         }
       }
