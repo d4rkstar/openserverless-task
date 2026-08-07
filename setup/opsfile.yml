@@ -124,9 +124,9 @@ tasks:
       - ops config slim
       - ops config apihost '{{.DOMAIN}}' --protocol={{.PROTO}}
       - ops setup devcluster
+      - ops setup nuvolaris add-user
       - ops setup nuvolaris streamer deploy
       - ops setup nuvolaris system-api deploy
-      - ops setup nuvolaris add-user
 
   devcluster:
     vars:
@@ -144,10 +144,6 @@ tasks:
           task check-ports PORTS="{{ .PORTS }}"
         fi
         {{.RUN}} ops setup docker create
-        if test -z {{.__skip_preload_images}}
-        then
-          {{.RUN}} ops setup docker preload
-        fi
         {{.RUN}} ops setup kubernetes create
         {{.RUN}} ops setup nuvolaris login
         config STATUS_LAST=devcluster

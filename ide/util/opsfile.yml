@@ -32,11 +32,11 @@ tasks:
       then $OPS ide nodejs zip DIR="$($OPS -opspath "packages/{{.A}}")"
       elif test -e "packages/{{.A}}/composer.json"
       then $OPS ide php zip DIR="$($OPS -opspath "packages/{{.A}}")"
-      else echo "no zip environment"
+      else true #echo "no zip environment"
       fi
 
   action:
-    desc: build an action filling its zip file 
+    desc: build an action filling its zip file
     silent: true
     requires: { vars: [A]}
     cmds:

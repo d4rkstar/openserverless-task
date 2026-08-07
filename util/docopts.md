@@ -24,6 +24,7 @@ OpenServerless Utilities
 
 ```text
 Usage:
+  util whoami
   util apihost
   util system
   util update-cli
@@ -44,12 +45,13 @@ Usage:
   util ingress-type
   util edit [<plugin>]
   util link-plugin <plugin>
-  util docker-proxy [<port>] [<host>] [--remove]
+  util stdtext <text>
 ```
 
 ## Commands
 
 ```
+-  whoami                  current user/namespace
 -  apihost                 current apihost
 -  system                  system info (<os>-<arch> in Go format)
 -  update-cli              update the cli downloading the binary
@@ -70,15 +72,16 @@ Usage:
 -  ingress-type            return the ingress type
 -  edit                    edit (with vscode) the current tasks or a plugin
 -  link-plugin             link the <plugin> in current directory to the global list
--  docker-proxy            launch (or remove) in docker a proxy listening in public <port> (default 8080) to the <host> (default devel.miniops.me)
+-  stdtext                 standardize the text to the text convetions of the underlying platform (windows/unix)
 ```
 
 ## Options
 
 ```
-  --showhelp              Show configuration tool help.
+  --showhelp               Show configuration tool help.
   --override               Override the current configuration.
   --verbose                Provide more details.
   --clean                  Remove all files from the web bucket before upload.
   --batchsize=<batchsize>  Number of concurrent web uploads
+  --dry                    Dry Run
 ```

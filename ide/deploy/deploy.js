@@ -51,7 +51,38 @@ async function exec(cmd) {
     cwd: process.env.OPS_PWD,
     stdio: ["inherit", "inherit", "inherit"],
   });
-  await proc.exited;
+  const code = await proc.exited;
+  if (code !== 0) {
+    throw new Error(`command failed (${code}): ${cmd}`);
+  }
+}
+
+/**
+ * Determine the language kind from file extension
+ * @param {string} filePath - Path to the file
+ * @returns {string|null} - Language kind or null
+ */
+function getKindFromFile(filePath) {
+  const ext = path.extname(filePath);
+  const basename = path.basename(filePath);
+
+  // Check by main file name
+  if (basename === "__main__.py") return "python";
+  if (basename === "index.js") return "nodejs";
+  if (basename === "index.php") return "php";
+  if (basename === "main.go") return "go";
+  if (basename === "Main.java") return "java";
+
+  // Check by extension
+  if (ext === ".py") return "python";
+  if (ext === ".js") return "nodejs";
+  if (ext === ".php") return "php";
+  if (ext === ".go") return "go";
+  if (ext === ".java") return "java";
+  if (ext === ".rb") return "ruby";
+  if (ext === ".cs") return "dotnet";
+
+  return null;
 }
 
 /**
@@ -161,7 +192,7 @@ export async function deployAction(artifact) {
     typ = spData[1];
     pkg = sp[1];
   } catch(error) {
-    
+
     console.log("❌ cannot deploy", artifact, "Error:", error.message);
     return;
   }
@@ -241,9 +272,14 @@ export async function deployAction(artifact) {
     }
   }
 
-  const argsStr = args.join(" ");
+  const args = (await extractArgs(toInspect)).join(" ");
   const actionName = `${pkg}/${name}`;
-  await exec(`ops action update ${actionName} ${artifact} ${argsStr}`);
+
+  try {
+    await exec(`ops action update ${actionName} ${artifact} ${args}`);
+  } catch(error) {
+    console.log("❌ cannot deploy", artifact, "Error:", error.message);
+  }
 
   activeDeployments.delete(artifact);
 

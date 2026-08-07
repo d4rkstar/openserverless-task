@@ -1,3 +1,21 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+
 version: 3
 
 vars:
@@ -34,16 +52,17 @@ tasks:
     desc: download 7zz
     vars:
       VERSION: "2407"
+      VER: "24.07"
       SUFFIX:
-         sh: |
-             case "{{.OS}}-{{.ARCH}}" in
+        sh: |
+            case "{{.OS}}-{{.ARCH}}" in
               linux-amd64) echo "7z{{.VERSION}}-linux-x64.tar.xz" ;;
               linux-arm64) echo "7z{{.VERSION}}-linux-arm64.tar.xz" ;;
               darwin-*) echo "7z{{.VERSION}}-mac.tar.xz" ;;
               windows-*) echo "7zr.exe" ;;
               *) echo "unknown" ;;
-             esac
-      URL: "https://7-zip.org/a/{{.SUFFIX}}"
+            esac
+      URL: "https://github.com/ip7z/7zip/releases/download/{{.VER}}/{{.SUFFIX}}"
       FILE: "{{base .URL}}"
     cmds:
     - curl -sL "{{.URL}}"  -o "{{.FILE}}"
@@ -116,7 +135,7 @@ tasks:
   k3sup:
     desc: download k3sup
     vars:
-      VERSION: 0.13.6
+      VERSION: 0.13.12
       BASE: "https://github.com/alexellis/k3sup/releases/download/{{.VERSION}}"
       FILE:
         sh: |
@@ -164,15 +183,15 @@ tasks:
     vars:
       VERSION: "0.7.19"
       FILE:
-         sh: |
-             case "{{.OS}}-{{.ARCH}}" in
+        sh: |
+              case "{{.OS}}-{{.ARCH}}" in
               linux-amd64) echo uv-x86_64-unknown-linux-gnu.tar.gz ;;
               linux-arm64) echo uv-aarch64-unknown-linux-gnu.tar.gz ;;
               darwin-arm64) echo uv-aarch64-apple-darwin.tar.gz ;;
               darwin-amd64) echo uv-x86_64-apple-darwin.tar.gz ;;
               windows-*) echo uv-x86_64-pc-windows-msvc.zip ;;
               *) echo "unknown" ;;
-             esac
+              esac
       URL: "https://github.com/astral-sh/uv/releases/download/{{.VERSION}}/{{.FILE}}"
       OUT: uv
     cmds:
@@ -287,30 +306,30 @@ tasks:
       ;;
       esac
 
-  kubefwd:
-    desc: download kubefwd
-    vars:
-      VERSION: "1.22.5"
-      SUFFIX:
-        sh: |
-            case "{{.OS}}-{{.ARCH}}" in
-            linux-amd64) echo "_Linux_x86_64" ;;
-            linux-arm64) echo "_Linux_arm64" ;;
-            darwin-amd64) echo "_Darwin_x86_64" ;;
-            darwin-arm64) echo "_Darwin_arm64" ;;
-            windows-*) echo "_Windows_x86_64" ;;
-            *) echo "unknown" ;;
-            esac
-            #https://github.com/txn2/kubefwd/releases/download/1.22.5/kubefwd_Darwin_x86_64.tar.gz
-      URL: "https://github.com/txn2/kubefwd/releases/download/{{.VERSION}}/kubefwd{{.SUFFIX}}{{.ARC}}"
-      FILE: "{{base .URL}}"
-      OUT: kubefwd
-    cmds:
-    - task: download-and-extract
-      vars:
-        URL: "{{.URL}}"
-        FILE: "{{.FILE}}"
-        OUT: kubefwd
+  #kubefwd:
+  #  desc: download kubefwd
+  #  vars:
+  #    VERSION: "1.25.3"
+  #    SUFFIX:
+  #      sh: |
+  #          case "{{.OS}}-{{.ARCH}}" in
+  #          linux-amd64) echo "_Linux_x86_64" ;;
+  #          linux-arm64) echo "_Linux_arm64" ;;
+  #          darwin-amd64) echo "_Darwin_x86_64" ;;
+  #          darwin-arm64) echo "_Darwin_arm64" ;;
+  #          windows-*) echo "_Windows_x86_64" ;;
+  #          *) echo "unknown" ;;
+  #          esac
+  #          #https://github.com/txn2/kubefwd/releases/download/1.22.5/kubefwd_Darwin_x86_64.tar.gz
+  #    URL: "https://github.com/txn2/kubefwd/releases/download/{{.VERSION}}/kubefwd{{.SUFFIX}}{{.ARC}}"
+  #    FILE: "{{base .URL}}"
+  #    OUT: kubefwd
+  #  cmds:
+  #  - task: download-and-extract
+  #    vars:
+  #      URL: "{{.URL}}"
+  #      FILE: "{{.FILE}}"
+  #      OUT: kubefwd
 
   all:
     - task: 7zz
@@ -322,11 +341,11 @@ tasks:
     - task: rg
     - task: uv
     - task: helm
-    - task: kubefwd
     - task: yq
     # do not test zip as it is a special case
     #- task: zip
     # commented out for now
+    #- task: kubefwd
     #- task: hugo
     #- task: k3d
 
