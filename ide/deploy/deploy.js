@@ -212,7 +212,7 @@ export async function deployAction(artifact) {
   // Check if there's a --docker <language>:auto parameter and replace it
   const dockerArgIndex = args.findIndex(arg => arg === "--docker");
   if (dockerArgIndex !== -1 && dockerArgIndex + 1 < args.length) {
-    const dockerValue = args[dockerArgIndex + 1];
+    const dockerValue = args[dockerArgIndex + 1];    
 
     // Check if it matches the pattern <language>:auto
     const autoMatch = dockerValue.match(/^(\w+):auto$/);
@@ -272,11 +272,11 @@ export async function deployAction(artifact) {
     }
   }
 
-  const args = (await extractArgs(toInspect)).join(" ");
+  const argsStr =args.join(" ");
   const actionName = `${pkg}/${name}`;
 
   try {
-    await exec(`ops action update ${actionName} ${artifact} ${args}`);
+    await exec(`ops action update ${actionName} ${artifact} ${argsStr}`);
   } catch(error) {
     console.log("❌ cannot deploy", artifact, "Error:", error.message);
   }
