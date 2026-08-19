@@ -82,7 +82,8 @@ export async function scan() {
         "packages/*/*/index.js",
         "packages/*/*/__main__.py",
         "packages/*/*/index.php",
-        "packages/*/*/main.go"
+        "packages/*/*/main.go",
+        "packages/*/*/Main.java",
     ];
     // load user defined main functions or use `defaultMainsGlobs`
     const mainsGlobs = await getOpenServerlessConfig("mains", defaultMainsGlobs);
@@ -108,7 +109,8 @@ export async function scan() {
         "packages/*/*.py",
         "packages/*/*.js",
         "packages/*/*.php",
-        "packages/*/*.go"
+        "packages/*/*.go",
+        "packages/*/*.java"
     ];
     const singlesGlobs = await getOpenServerlessConfig("singles", defaultSinglesGlobs);
     const singlesSet = new Set();

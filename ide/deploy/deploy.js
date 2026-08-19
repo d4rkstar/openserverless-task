@@ -18,7 +18,8 @@
 import fs from "fs/promises";
 import path from "path";
 import { expandEnv } from "./env_utils";
-import { getBuiltImageTag, buildImage } from "./builder.js";
+import { getBuiltImageTag, buildImage, getRuntimeImage } from "./builder.js";
+import { addActionToDeployInfo } from "./syncDeployInfo.js";
 const { parse } = await import("shell-quote");
 
 /**
@@ -116,7 +117,7 @@ function getKindFromFile(filePath) {
 async function extractArgs(files) {
   const res = [];
   for (const file of files) {
-    if (await fs.exists(file)) {
+    if (await fs.exists(file) && (await fs.stat(file)).isFile()) {
       const fileContent = await fs.readFile(file, "utf-8");
       const lines = fileContent.split("\n");
       for (const line of lines) {
@@ -208,26 +209,27 @@ export async function deployAction(artifact) {
   }
 
   let args = await extractArgs(toInspect);
+  let dockerFailed = false;
 
-  // Check if there's a --docker <language>:auto parameter and replace it
+  // Check if there's a --docker <language>:extend:<auto|version> parameter and replace it
   const dockerArgIndex = args.findIndex(arg => arg === "--docker");
   if (dockerArgIndex !== -1 && dockerArgIndex + 1 < args.length) {
-    const dockerValue = args[dockerArgIndex + 1];    
+    const dockerValue = args[dockerArgIndex + 1];
 
-    // Check if it matches the pattern <language>:auto
-    const autoMatch = dockerValue.match(/^(\w+):auto$/);
-    if (autoMatch) {
-      const kind = autoMatch[1]; // Extract the language kind (python, nodejs, etc.)
-      console.log(`🔍 Detected --docker ${kind}:auto annotation`);
+    // Check if it matches the pattern <language>:extend:<auto|version>
+    const extendMatch = dockerValue.match(/^(\w+):extend:([\w.]+)$/);
+    if (extendMatch) {
+      const kind = extendMatch[1]; // Extract the language kind (python, nodejs, etc.)
+      const requestedVersion = extendMatch[2]; // "auto" or an explicit version
 
-      // Get the built image tag for this kind
-      let imageTag = await getBuiltImageTag(kind);
+      try {
+        console.log(`🔍 Detected --docker ${kind}:extend:${requestedVersion} annotation`);
 
-      // If no image tag found, try to build one
-      if (!imageTag) {
-        console.log(`⚠️ No custom image found for ${kind}, attempting to build...`);
+        // Resolve and validate the version to extend
+        const { version: resolvedVersion } = await getRuntimeImage(kind, requestedVersion);
 
-        // Look for requirement file in the current directory
+        // Look for requirement file, so we can (re)build the image if the
+        // requirement file hash changed since the last cached build
         const requirementFiles = {
           'python': 'requirements.txt',
           'nodejs': 'package.json',
@@ -238,6 +240,7 @@ export async function deployAction(artifact) {
           'dotnet': 'project.json'
         };
 
+        let imageTag = null;
         const reqFile = requirementFiles[kind];
         if (reqFile) {
           // Check in packages directory first, then in current working directory
@@ -246,28 +249,37 @@ export async function deployAction(artifact) {
 
           try {
             await fs.access(reqPath);
-            // File exists, build the image
-            const hash = await buildImage(reqPath);
-            if (hash) {
-              // Get the newly built image tag
-              imageTag = await getBuiltImageTag(kind);
+            // File exists: buildImage() compares the current hash against the
+            // cached one and only triggers a real build when it changed
+            const result = await buildImage(reqPath, resolvedVersion);
+            if (result) {
+              imageTag = await getBuiltImageTag(kind, resolvedVersion);
             }
           } catch (error) {
             console.log(`⚠️ No ${reqFile} found in packages directory, cannot build custom image`);
           }
         }
-      }
 
-      if (imageTag) {
-        const registryHost = getRegistryHost();
-        const fullImageTag = `${registryHost}/${imageTag}`;
-        console.log(`🐳 Using custom built image: ${fullImageTag}`);
-        // Replace <language>:auto with the full image tag
-        args[dockerArgIndex + 1] = fullImageTag;
-      } else {
-        console.log(`⚠️ Could not build custom image for ${kind}, using default runtime`);
-        // Remove --docker <language>:auto if no custom image is available
-        args.splice(dockerArgIndex, 2);
+        // Fall back to a previously cached tag if the requirement file
+        // couldn't be found/rebuilt but a cached image still exists
+        if (!imageTag) {
+          imageTag = await getBuiltImageTag(kind, resolvedVersion);
+        }
+
+        if (imageTag) {
+          const registryHost = getRegistryHost();
+          const fullImageTag = `${registryHost}/${imageTag}`;
+          console.log(`🐳 Using custom built image: ${fullImageTag}`);
+          // Replace <language>:extend:<auto|version> with the full image tag
+          args[dockerArgIndex + 1] = fullImageTag;
+        } else {
+          console.log(`⚠️ Could not build custom image for ${kind}:${resolvedVersion}, using default runtime`);
+          // Remove --docker <language>:extend:<auto|version> if no custom image is available
+          args.splice(dockerArgIndex, 2);
+        }
+      } catch (error) {
+        console.log("❌ cannot deploy", artifact, "Error:", error.message);
+        dockerFailed = true;
       }
     }
   }
@@ -275,10 +287,13 @@ export async function deployAction(artifact) {
   const argsStr =args.join(" ");
   const actionName = `${pkg}/${name}`;
 
-  try {
-    await exec(`ops action update ${actionName} ${artifact} ${argsStr}`);
-  } catch(error) {
-    console.log("❌ cannot deploy", artifact, "Error:", error.message);
+  if (!dockerFailed) {
+    try {
+      await exec(`ops action update ${actionName} ${artifact} ${argsStr}`);
+      addActionToDeployInfo(pkg, name);
+    } catch(error) {
+      console.log("❌ cannot deploy", artifact, "Error:", error.message);
+    }
   }
 
   activeDeployments.delete(artifact);

@@ -113,26 +113,56 @@ async function loadRuntimes() {
 }
 
 /**
- * Get default runtime image for a language kind
- * @param {string} kind - Language kind (python, nodejs, etc.)
- * @returns {Promise<string>} - Runtime image (e.g., "apache/openserverless-runtime-python:v3.12-2506091954")
+ * Resolve the runtime image to extend for a given kind and version.
+ * Extendibility and release metadata now live under the "openserverless" key
+ * of each runtime entry in runtimes.json (formerly kept in ops-runtimes.json).
+ * @param {string} kind - Language kind (python, nodejs, go, java, php, ...)
+ * @param {string} version - "auto" for the most recently released extendible
+ *   version, or an explicit version (e.g. "3.13", with or without a leading "v")
+ * @returns {Promise<{image: string, version: string}>} - Source image and the resolved plain version
  */
-async function getDefaultRuntimeImage(kind) {
+export async function getRuntimeImage(kind, version) {
   const runtimes = await loadRuntimes();
   const languageRuntimes = runtimes.runtimes[kind];
-
   if (!languageRuntimes || languageRuntimes.length === 0) {
     throw new Error(`No runtime found for kind: ${kind}`);
   }
 
-  // Find the default runtime
-  const defaultRuntime = languageRuntimes.find((r) => r.default === true);
-  if (!defaultRuntime) {
-    throw new Error(`No default runtime found for kind: ${kind}`);
+  const extendibleEntries = languageRuntimes
+    .filter((r) => r.openserverless?.extendible === true)
+    .map((r) => ({ version: r.kind.slice(kind.length + 1), ...r.openserverless }));
+
+  if (extendibleEntries.length === 0) {
+    throw new Error(`No extendible versions available for kind: ${kind}`);
   }
 
-  const { prefix, name, tag } = defaultRuntime.image;
-  return `${prefix}/${name}:${tag}`;
+  let resolvedVersion;
+  if (version === "auto") {
+    const sorted = [...extendibleEntries].sort(
+      (a, b) => new Date(b.releaseDate) - new Date(a.releaseDate)
+    );
+    resolvedVersion = sorted[0].version;
+  } else {
+    const normalized = version.replace(/^v/, "");
+    const match = extendibleEntries.find((e) => e.version === normalized);
+    if (!match) {
+      const available = extendibleEntries.map((e) => e.version).join(", ");
+      throw new Error(
+        `Version ${version} is not extendible for kind ${kind}. Extendible versions: ${available}`
+      );
+    }
+    resolvedVersion = match.version;
+  }
+
+  const runtimeEntry = languageRuntimes.find((r) => r.kind === `${kind}:${resolvedVersion}`);
+  if (!runtimeEntry) {
+    throw new Error(
+      `Version ${resolvedVersion} is extendible for kind ${kind} but no matching runtime image was found in runtimes.json (expected kind "${kind}:${resolvedVersion}")`
+    );
+  }
+
+  const { prefix, name, tag } = runtimeEntry.image;
+  return { image: `${prefix}/${name}:${tag}`, version: resolvedVersion };
 }
 
 /**
@@ -149,12 +179,13 @@ function getUsername() {
 }
 
 /**
- * Load cached image hash for a language kind
+ * Load cached image hash for a language kind + version
  * @param {string} kind - Language kind
+ * @param {string} version - Resolved runtime version
  * @returns {Promise<string|null>} - Cached hash or null if not found
  */
-async function loadCachedImageHash(kind) {
-  const cachePath = path.join(process.env.OPS_PWD || process.cwd(), ".ops", `image.${kind}`);
+async function loadCachedImageHash(kind, version) {
+  const cachePath = path.join(process.env.OPS_PWD || process.cwd(), ".ops", `image.${kind}-${version}`);
   try {
     const hash = await fs.readFile(cachePath, "utf-8");
     return hash.trim();
@@ -166,9 +197,10 @@ async function loadCachedImageHash(kind) {
 /**
  * Save image hash to cache
  * @param {string} kind - Language kind
+ * @param {string} version - Resolved runtime version
  * @param {string} hash - Image hash
  */
-async function saveCachedImageHash(kind, hash) {
+async function saveCachedImageHash(kind, version, hash) {
   const opsDir = path.join(process.env.OPS_PWD || process.cwd(), ".ops");
 
   // Create .ops directory if it doesn't exist
@@ -178,16 +210,17 @@ async function saveCachedImageHash(kind, hash) {
     // Directory might already exist
   }
 
-  const cachePath = path.join(opsDir, `image.${kind}`);
+  const cachePath = path.join(opsDir, `image.${kind}-${version}`);
   await fs.writeFile(cachePath, hash);
 }
 
 /**
  * Build a custom runtime image via admin API
  * @param {string} requirementFile - Path to requirement file
- * @returns {Promise<string>} - Image tag (hash)
+ * @param {string} [version="auto"] - Runtime version to extend ("auto" or an explicit extendible version)
+ * @returns {Promise<{hash: string, version: string}|null>} - Image hash and resolved version
  */
-export async function buildImage(requirementFile) {
+export async function buildImage(requirementFile, version = "auto") {
   const filename = path.basename(requirementFile);
   const kind = getKindFromRequirement(filename);
 
@@ -198,17 +231,20 @@ export async function buildImage(requirementFile) {
 
   console.log(`🔨 Building image for ${kind} from ${requirementFile}`);
 
+  // Resolve the runtime image and concrete version to extend
+  const { image: sourceImage, version: resolvedVersion } = await getRuntimeImage(kind, version);
+
   // Compute hash of requirement file
   const hash = await computeFileHash(requirementFile);
   console.log(`📊 Computed hash: ${hash}`);
 
   // Check if we already built this image
-  const cachedHash = await loadCachedImageHash(kind);
+  const cachedHash = await loadCachedImageHash(kind, resolvedVersion);
   console.log(`📊 Cached hash: ${cachedHash || 'none'}`);
 
   if (cachedHash === hash) {
-    console.log(`✅ Image already built for ${kind} (hash: ${hash})`);
-    return hash;
+    console.log(`✅ Image already built for ${kind}:${resolvedVersion} (hash: ${hash})`);
+    return { hash, version: resolvedVersion };
   }
 
   console.log(`🔄 Hash mismatch, building new image...`);
@@ -218,11 +254,8 @@ export async function buildImage(requirementFile) {
   const authToken = await getAuthToken();
   const apiHost = await getApiHost();
 
-  // Get source runtime image
-  const sourceImage = await getDefaultRuntimeImage(kind);
-
   // Build target image tag
-  const targetImage = `${username}:${kind}-${hash}`;
+  const targetImage = `${username}:${kind}-${resolvedVersion}-${hash}`;
 
   // Read and base64 encode the requirement file
   const fileContent = await fs.readFile(requirementFile, "utf-8");
@@ -252,16 +285,17 @@ export async function buildImage(requirementFile) {
 
     if (response.status === 200) {
       const result = await response.json();
-      const jobName = result.data?.job_name || 'unknown';
-      const jobId = result.data?.id || 'unknown';
+      
+      const jobName = result?.job_name || 'unknown';
+      const jobId = result?.id || 'unknown';
 
-      console.log(`✅ Build started successfully for ${kind}`);
+      console.log(`✅ Build started successfully for ${kind}:${resolvedVersion}`);
       console.log(`🏗️ Kubernetes job: ${jobName} (ID: ${jobId})`);
 
       // Save the hash to cache
-      await saveCachedImageHash(kind, hash);
+      await saveCachedImageHash(kind, resolvedVersion, hash);
 
-      return hash;
+      return { hash, version: resolvedVersion };
     } else {
       const errorText = await response.text();
       console.error(`❌ Build failed with status ${response.status}: ${errorText}`);
@@ -274,15 +308,16 @@ export async function buildImage(requirementFile) {
 }
 
 /**
- * Get the built image tag for a language kind
+ * Get the built image tag for a language kind + version
  * @param {string} kind - Language kind
- * @returns {Promise<string|null>} - Image tag in format "user:kind-hash" or null
+ * @param {string} version - Resolved runtime version
+ * @returns {Promise<string|null>} - Image tag in format "user:kind-version-hash" or null
  */
-export async function getBuiltImageTag(kind) {
-  const hash = await loadCachedImageHash(kind);
+export async function getBuiltImageTag(kind, version) {
+  const hash = await loadCachedImageHash(kind, version);
   if (hash) {
     const username = getUsername();
-    return `${username}:${kind}-${hash}`;
+    return `${username}:${kind}-${version}-${hash}`;
   }
   return null;
 }
@@ -327,7 +362,7 @@ export async function scanAndBuildImages() {
 /**
  * Extract docker annotation from action files
  * @param {string[]} files - Array of file paths to check
- * @returns {Promise<string|null>} - Language kind or null
+ * @returns {Promise<{kind: string, version: string}|null>} - Language kind + requested version, or null
  */
 async function extractDockerAnnotation(files) {
   for (const file of files) {
@@ -336,16 +371,16 @@ async function extractDockerAnnotation(files) {
       const lines = fileContent.split("\n");
 
       for (const line of lines) {
-        // Match Python-style comments: # --docker <language>:auto
-        const pythonMatch = line.match(/^#\s*--docker\s+(\w+):auto/);
+        // Match Python-style comments: # --docker <language>:extend:<auto|version>
+        const pythonMatch = line.match(/^#\s*--docker\s+(\w+):extend:([\w.]+)/);
         if (pythonMatch) {
-          return pythonMatch[1];
+          return { kind: pythonMatch[1], version: pythonMatch[2] };
         }
 
-        // Match JS-style comments: // --docker <language>:auto
-        const jsMatch = line.match(/^\/\/\s*--docker\s+(\w+):auto/);
+        // Match JS-style comments: // --docker <language>:extend:<auto|version>
+        const jsMatch = line.match(/^\/\/\s*--docker\s+(\w+):extend:([\w.]+)/);
         if (jsMatch) {
-          return jsMatch[1];
+          return { kind: jsMatch[1], version: jsMatch[2] };
         }
       }
     } catch (error) {
@@ -362,7 +397,7 @@ async function extractDockerAnnotation(files) {
  * @returns {Promise<void>}
  */
 export async function buildImageForAction(actionPath) {
-  const MAINS = ["__main__.py", "index.js", "index.php", "main.go"];
+  const MAINS = ["__main__.py", "index.js", "index.php", "main.go", "Main.java"];
   const stat = await fs.stat(actionPath);
 
   let filesToCheck = [];
@@ -384,14 +419,15 @@ export async function buildImageForAction(actionPath) {
   }
 
   // Extract docker annotation
-  const kind = await extractDockerAnnotation(filesToCheck);
+  const annotation = await extractDockerAnnotation(filesToCheck);
 
-  if (!kind) {
-    console.log(`ℹ️ No --docker <language>:auto annotation found in ${actionPath}`);
+  if (!annotation) {
+    console.log(`ℹ️ No --docker <language>:extend:<auto|version> annotation found in ${actionPath}`);
     return;
   }
 
-  console.log(`🔍 Found --docker ${kind}:auto annotation`);
+  const { kind, version } = annotation;
+  console.log(`🔍 Found --docker ${kind}:extend:${version} annotation`);
 
   // Map kind to requirement file
   const requirementFiles = {
@@ -416,9 +452,15 @@ export async function buildImageForAction(actionPath) {
 
   try {
     await fs.access(reqPath);
-    console.log(`📦 Building image for ${kind} using packages/${reqFile}`);
-    await buildImage(reqPath);
   } catch (error) {
     console.log(`⚠️ No ${reqFile} found in packages directory`);
+    return;
+  }
+
+  try {
+    console.log(`📦 Building image for ${kind}:${version} using packages/${reqFile}`);
+    await buildImage(reqPath, version);
+  } catch (error) {
+    console.log(`❌ Cannot build image for ${kind}:extend:${version}. Error: ${error.message}`);
   }
 }
