@@ -33,6 +33,12 @@ rules:
 - apiGroups: [""]
   resources: ["configmaps"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]  
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get","list"]
 # assign the possibility to operate on jobs (admin api)
 - apiGroups: ["batch"]
   resources: ["jobs"]

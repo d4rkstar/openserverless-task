@@ -44,6 +44,8 @@ tasks:
     silent: true
     cmds:
       - |
+        {{.DRY}} ops admin ingress undeploy U="{{._username_}}"
+      - |
         if test "$SSO_ENABLED" = "true" && ! {{.__confirm_namespace_delete}}
         then
           echo "SSO is enabled on this cluster."
@@ -53,6 +55,8 @@ tasks:
           echo "Re-run with '--confirm-namespace-delete' only when you really want to deprovision the namespace."
           exit 1
         fi
+        {{.DRY}} ops admin ingress undeploy U="{{._username_}}"
+      - |
         {{.DRY}} kubectl -n nuvolaris delete wsku/{{._username_}}
         {{.DRY}}  $OPS -config -r {{._username_}}
 
