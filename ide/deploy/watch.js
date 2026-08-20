@@ -54,22 +54,6 @@ export const watcherOptions = {
   ignored: (file) => shouldIgnoreFile(file),
 };
 
-export const watcherOptions = {
-  persistent: true,
-  ignoreInitial: true,
-  recursive: true,
-  // WHY: MCP scaffold/service tools rewrite generated wrappers in multiple
-  // writes. Deploying the first partial write can miss #--kind and produce an
-  // invalid ZIP update, so wait for the file to remain stable before reading it.
-  awaitWriteFinish: {
-    stabilityThreshold: 500,
-    pollInterval: 100,
-  },
-  atomic: 250,
-  ignored: (file) => shouldIgnoreFile(file),
-};
-
-
 /**
  * This function will return true when the file should
  * be ignored by fs watcher or the deployer
